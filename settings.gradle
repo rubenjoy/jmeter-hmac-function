@@ -1,1 +1,3 @@
-rootProject.name = 'jmeter-hmac-function'
+rootProject.name = 'jmeter-plugins'
+
+include 'hmac-function', 'json-web-token'
