@@ -27,7 +27,8 @@ public class JWTCreator extends AbstractFunction {
     private static final List<String> desc = [
         'Algorithm HS256,HS384,HS512 | RS256,RS384,RS512 | ES256,ES384,ES512',
         'Secret key or encoded private key',
-        'Claims in payload, formated simple key:pair value and comma separated',
+        'Claims in payload, simple key:string-value pair and comma separated',
+        'Array Claims, simple key:array-value pair, comma separated OPTIONAL',
         'Variable name to stow the token OPTIONAL']
 
     private static final String FUNCTION_NAME = '__jwtCreate'
@@ -35,12 +36,13 @@ public class JWTCreator extends AbstractFunction {
     private List<CompoundVariable> values
 
     private static final int MIN_PARAM_COUNT = 3
-    private static final int MAX_PARAM_COUNT = 4
+    private static final int MAX_PARAM_COUNT = 5
 
     private static final int ALGORITHM = 1
     private static final int KEY = 2
     private static final int CLAIMS = 3
-    private static final int VARIABLE_NAME = 4
+    private static final int ARRAY_CLAIMS = 4
+    private static final int VARIABLE_NAME = 5
 
     private static final List<String> SUPPORTED_ALGORITHMS = [
         'HS256', 'HS384', 'HS512', 'RS256', 'RS512', 'ES256', 'ES384', 'ES512'
@@ -61,11 +63,12 @@ public class JWTCreator extends AbstractFunction {
         def algorithm = values[ALGORITHM - 1].execute().trim()
         def key = values[KEY - 1].execute().trim()
         def claims = values[CLAIMS - 1].execute().trim()
+        def arrayClaims = values[ARRAY_CLAIMS - 1].execute().trim()
 
         def algo = create(algorithm, key)
         def token = ''
         if (algo != null) {
-            token = sign(algo, claims)
+            token = sign(algo, claims, arrayClaims)
         }
 
         if (values.size() >= VARIABLE_NAME) {
@@ -147,10 +150,15 @@ public class JWTCreator extends AbstractFunction {
       *  return a signed token
       *  @param claims in comma separated, with form key:claim_value
       */
-     private String sign(Algorithm algorithm, String claims) {
+     private String sign(Algorithm algorithm, String claims,
+            String arrayClaims) {
+
         def builder = JWT.create()
         claims.findAll(/([^,:]+):([^,:]+)/) {
             _, key, claimValue -> builder.addClaim(key, claimValue)
+        }
+        arrayClaims.findAll(/([^,:]+):([^,:]+)/) {
+            _, key, value -> builder.withArrayClaim(key, value.split(';'))
         }
         return builder.sign(algorithm)
     }
@@ -173,7 +181,12 @@ public class JWTCreator extends AbstractFunction {
         if (key.length() <= 0) {
             throw new InvalidVariableException("empty key/secret.")
         }
-        variables[CLAIMS - 1].execute().trim().split('.').each {
+        variables[CLAIMS - 1].execute().trim().split(',').each {
+            if (it.split(':').length != 2) {
+                throw new InvalidVariableException("${it} invalid form.")
+            }
+        }
+        variables[ARRAY_CLAIMS - 1].execute().trim().split(',').each {
             if (it.split(':').length != 2) {
                 throw new InvalidVariableException("${it} invalid form.")
             }
