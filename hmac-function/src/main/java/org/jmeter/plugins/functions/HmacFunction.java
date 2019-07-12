@@ -32,7 +32,7 @@ public class HmacFunction extends  AbstractFunction {
     static {
         desc.add("plaintext");
         desc.add("key");
-        desc.add("algorithm");
+        desc.add("algorithm, HmacMD5|HmacSHA1HmacSHA256");
         desc.add("variable_name");
     }
 

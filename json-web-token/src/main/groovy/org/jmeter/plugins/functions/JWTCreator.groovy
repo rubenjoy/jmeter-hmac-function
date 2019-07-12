@@ -5,6 +5,9 @@ import com.auth0.jwt.algorithms.Algorithm
 
 import groovy.util.logging.Slf4j
 
+import java.security.KeyFactory
+import java.security.spec.PKCS8EncodedKeySpec
+
 import org.apache.jmeter.engine.util.CompoundVariable
 import org.apache.jmeter.functions.AbstractFunction
 import org.apache.jmeter.functions.InvalidVariableException
@@ -17,7 +20,7 @@ import java.util.Collection
  *  Parameters:
  *  <ul>
  *      <li>algorithm, single key not supporting keystore</li>
- *      <li>secret/private key</li>
+ *      <li>secret/private key PKCS8 encoding</li>
  *      <li>claims should be in simple key-value pair</li>
  *  </ul>
  */
@@ -26,7 +29,7 @@ public class JWTCreator extends AbstractFunction {
 
     private static final List<String> desc = [
         'Algorithm HS256,HS384,HS512 | RS256,RS384,RS512 | ES256,ES384,ES512',
-        'Secret key or encoded private key',
+        'Secret key or encoded private key PKCS8',
         'Claims in payload, simple key:string-value pair and comma separated',
         'Array Claims, simple key:array-value pair, comma separated OPTIONAL',
         'Variable name to stow the token OPTIONAL']
@@ -47,6 +50,8 @@ public class JWTCreator extends AbstractFunction {
     private static final List<String> SUPPORTED_ALGORITHMS = [
         'HS256', 'HS384', 'HS512', 'RS256', 'RS512', 'ES256', 'ES384', 'ES512'
     ]
+
+    private static final factory = KeyFactory.getInstance('RSA')
 
     /**
      *  No-arg constructor.
@@ -69,6 +74,8 @@ public class JWTCreator extends AbstractFunction {
         def token = ''
         if (algo != null) {
             token = sign(algo, claims, arrayClaims)
+        } else {
+            log.warn("algo object is null.")
         }
 
         if (values.size() >= VARIABLE_NAME) {
@@ -96,6 +103,7 @@ public class JWTCreator extends AbstractFunction {
             case ~/^ES(256|384|512)$/:
                 return createECDSA(algorithm[-3..-1], secret)
             default:
+                log.info("${algorithm} not supported.")
                 break
         }
 
@@ -111,13 +119,16 @@ public class JWTCreator extends AbstractFunction {
             case ~/^512$/:
                 return Algorithm.HMAC512(key)
             default:
+                log.info("bit ${length} not supported.")
                 break
         }
         return null
      }
 
      private Algorithm createRSA(String length, String privateKey) {
-        def rsaPrivateKey = null
+        log.debug("encoded key: ${privateKey}")
+        def spec = new PKCS8EncodedKeySpec(privateKey.decodeBase64())
+        def rsaPrivateKey = factory.generatePrivate(spec)
         switch (length) {
             case ~/^256$/:
                 return Algorithm.RSA256(rsaPrivateKey)
@@ -126,6 +137,7 @@ public class JWTCreator extends AbstractFunction {
             case ~/^512$/:
                 return Algorithm.RSA512(rsaPrivateKey)
             default:
+                log.info("bit ${length} not supported.")
                 break
         }
         return null
@@ -141,6 +153,7 @@ public class JWTCreator extends AbstractFunction {
             case ~/^512$/:
                 return Algorithm.ECDSA512(dsaPrivateKey)
             default:
+                log.info("bit ${length} not supported.")
                 break
         }
         return null
@@ -182,12 +195,12 @@ public class JWTCreator extends AbstractFunction {
             throw new InvalidVariableException("empty key/secret.")
         }
         variables[CLAIMS - 1].execute().trim().split(',').each {
-            if (it.split(':').length != 2) {
+            if (it.trim().length() > 0 && it.split(':').length != 2) {
                 throw new InvalidVariableException("${it} invalid form.")
             }
         }
         variables[ARRAY_CLAIMS - 1].execute().trim().split(',').each {
-            if (it.split(':').length != 2) {
+            if (it.trim().length() > 0 && it.split(':').length != 2) {
                 throw new InvalidVariableException("${it} invalid form.")
             }
         }
